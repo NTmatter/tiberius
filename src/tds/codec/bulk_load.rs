@@ -3,7 +3,7 @@ use futures_util::io::{AsyncRead, AsyncWrite};
 use tracing::{event, Level};
 
 use crate::{
-    client::Connection, sql_read_bytes::SqlReadBytes, BytesMutWithDataColumns, ExecuteResult,
+    client::Connection, sql_read_bytes::SqlReadBytes, BytesMutWithDataColumns, ExecuteResult, Row,
 };
 
 use super::{
@@ -65,6 +65,55 @@ where
         self.write_packets().await?;
 
         Ok(())
+    }
+
+    /// Adds a row to the bulk insert, ensuring that column types and names match
+    /// before building and enqueuing each row.
+    ///
+    /// This function wraps `send`, organizing the input row to match the
+    /// order of the destination table.
+    ///
+    /// # Warning
+    ///
+    /// After the last row, [`finalize`] must be called to flush the buffered
+    /// data and for the data to actually be available in the table.
+    ///
+    /// [`finalize`]: #method.finalize
+    pub async fn send_row(&mut self, row: Row) -> crate::Result<()> {
+        // Ensure that column counts match.
+        if &self.columns.len() != &row.len() {
+            return Err(crate::Error::BulkInput(
+                format!(
+                    "Expecting {} columns but {} were given",
+                    &self.columns.len(),
+                    &row.len(),
+                )
+                .into(),
+            ));
+        }
+
+        // Ensure that all required columns are present and correctly-ordered.
+        let mut token_row = TokenRow::with_capacity(self.columns.len());
+        for table_column in &self.columns {
+            let column_name = &table_column.col_name;
+            let Some(idx) = row.columns.iter().position(|col| col.name.eq(column_name)) else {
+                return Err(crate::Error::BulkInput(
+                    format!("Target has a column named {column_name} but it is not present in the input row")
+                        .into(),
+                ));
+            };
+
+            let Some(column_data) = row.data.get(idx) else {
+                return Err(crate::Error::BulkInput(
+                    format!("Input row has column {column_name} at {idx}, but row data does not have corresponding index")
+                        .into(),
+                ));
+            };
+
+            token_row.push(column_data.clone());
+        }
+
+        self.send(token_row).await
     }
 
     /// Ends the bulk load, flushing all pending data to the wire.
