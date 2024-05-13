@@ -262,6 +262,10 @@ impl QueryIdx for &str {
 }
 
 impl Row {
+    pub fn new(columns: Arc<Vec<Column>>, data: TokenRow<'static>, result_index: usize) -> Self {
+        Self { columns, data, result_index }
+    }
+
     /// Columns defining the row data. Columns listed here are in the same order
     /// as the resulting data.
     ///
