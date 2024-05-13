@@ -251,7 +251,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> Client<S> {
         Ok(result)
     }
 
-    /// Execute a `BULK INSERT` statement, efficiantly storing a large number of
+    /// Execute an `INSERT BULK` statement, efficiently storing a large number of
     /// rows to a specified table. Note: make sure the input row follows the same
     /// schema as the table, otherwise calling `send()` will return an error.
     ///
