@@ -103,6 +103,11 @@ where
                 ));
             };
 
+            // TODO Is it possible to compare insert type against column type?
+            let column_info = row.columns.get(idx).unwrap();
+            &column_info.column_type;
+            &table_column.base.ty;
+
             let Some(column_data) = row.data.get(idx) else {
                 return Err(crate::Error::BulkInput(
                     format!("Input row has column {column_name} at {idx}, but row data does not have corresponding index")
